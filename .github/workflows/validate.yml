@@ -1,0 +1,36 @@
+name: Validate skills
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install skills-ref==0.1.1
+      - name: Validate every skill
+        run: |
+          python - <<'EOF'
+          import glob, pathlib, sys, skills_ref
+          bad = 0
+          for d in sorted(glob.glob("skills/*")):
+              problems = skills_ref.validate(pathlib.Path(d))
+              print(("FAIL " if problems else "ok   ") + d, problems or "")
+              bad += bool(problems)
+          sys.exit(1 if bad else 0)
+          EOF
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Smoke-test the CLI
+        run: |
+          node bin/utak.mjs init /tmp/vault
+          node bin/utak.mjs check --vault /tmp/vault --strict
+          node bin/utak.mjs search "small notes" --vault /tmp/vault
+          node bin/utak.mjs graph --vault /tmp/vault --out /tmp/graph
+
+      - name: CLI regression tests
+        run: node --test tests/cli.test.mjs
